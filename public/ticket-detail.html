@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Ticket Detail — Fresh Ticketing System</title>
+<link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+<div class="sidebar" id="sidebar"></div>
+<div class="layout">
+  <a href="/tickets.html">&larr; Back to Tickets</a>
+  <div class="card" id="ticketCard" style="margin-top:14px"></div>
+
+  <div class="card">
+    <h3 id="remoteHeading"></h3>
+    <label>Tool</label>
+    <select id="remoteTool">
+      <option value="">— select —</option>
+      <option value="AnyDesk">AnyDesk</option>
+      <option value="TeamViewer">TeamViewer</option>
+      <option value="Chrome Remote Desktop">Chrome Remote Desktop</option>
+    </select>
+    <label>Session ID / Link</label>
+    <input id="remoteLink" placeholder="e.g. anydesk:123456789" />
+    <button class="btn small" style="margin-top:12px" onclick="saveRemote()">Save</button>
+    <div class="remote-box" id="remoteView"></div>
+  </div>
+
+  <div class="card">
+    <h3>Work Log</h3>
+    <label>Minutes spent</label>
+    <input id="wlMinutes" type="number" min="1" />
+    <label>Note</label>
+    <input id="wlNote" />
+    <button class="btn small" style="margin-top:12px" onclick="addWorkLog()">Add Log</button>
+    <table style="margin-top:14px">
+      <thead><tr><th>Time</th><th>Agent</th><th>Minutes</th><th>Note</th></tr></thead>
+      <tbody id="workLogRows"></tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h3>Comments</h3>
+    <div id="commentsList"></div>
+    <label>Add comment</label>
+    <textarea id="newComment" rows="2"></textarea>
+    <button class="btn small" style="margin-top:10px" onclick="addComment()">Send</button>
+  </div>
+</div>
+
+<script src="/js/icons.js"></script>
+<script src="/js/api.js"></script>
+<script src="/js/nav.js"></script>
+<script>
+  Api.requireLogin();
+  renderSidebar("/tickets.html");
+  document.getElementById("remoteHeading").innerHTML = `${Icons.remote} Remote Session`;
+
+  const id = new URLSearchParams(window.location.search).get("id");
+  const TRANSITIONS = {
+    new: ["assigned", "closed"],
+    assigned: ["in_progress", "new", "closed"],
+    in_progress: ["resolved", "assigned"],
+    resolved: ["closed", "reopened"],
+    closed: ["reopened"],
+    reopened: ["assigned", "in_progress"]
+  };
+
+  let ticket, agents;
+
+  async function load() {
+    ticket = await Api.get(`/api/tickets/${id}`);
+    agents = await Api.get("/api/users?role=agent");
+
+    const nextStatuses = TRANSITIONS[ticket.status] || [];
+    document.getElementById("ticketCard").innerHTML = `
+      <h2>#${ticket.id} — ${ticket.title}</h2>
+      <p style="color:var(--text-dim)">${ticket.description}</p>
+      <div style="display:flex;gap:8px;margin:10px 0">
+        <span class="badge ${ticket.category}">${ticket.category}</span>
+        <span class="badge ${ticket.priority}">${ticket.priority}</span>
+        <span class="badge ${ticket.status}">${ticket.status.replace("_", " ")}</span>
+      </div>
+
+      <label>Assign to Agent</label>
+      <select id="assignSelect">
+        <option value="">— unassigned —</option>
+        ${agents.map((a) => `<option value="${a.id}" ${ticket.assigned_to === a.id ? "selected" : ""}>${a.name}</option>`).join("")}
+      </select>
+      <button class="btn small" style="margin-top:10px" onclick="saveAssign()">Save Assignment</button>
+
+      ${Object.keys(ticket.custom_values || {}).length ? `
+        <h4 style="margin-top:16px">Custom Fields</h4>
+        <ul>${Object.entries(ticket.custom_values).map(([k, v]) => `<li><b>${k}</b>: ${v}</li>`).join("")}</ul>
+      ` : ""}
+
+      <h4 style="margin-top:16px">Status</h4>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        ${nextStatuses.length
+          ? nextStatuses.map((s) => `<button class="btn small secondary" onclick="changeStatus('${s}')">${s.replace("_", " ")}</button>`).join("")
+          : `<span style="color:var(--text-dim)">No further transitions.</span>`}
+      </div>
+    `;
+
+    document.getElementById("remoteTool").value = ticket.remote_tool || "";
+    document.getElementById("remoteLink").value = ticket.remote_session_link || "";
+    document.getElementById("remoteView").textContent = ticket.remote_tool
+      ? `Active: ${ticket.remote_tool} — ${ticket.remote_session_link || "(no link)"}`
+      : "No remote session recorded.";
+
+    document.getElementById("workLogRows").innerHTML = (ticket.workLogs || []).map((w) => `
+      <tr><td>${new Date(w.created_at).toLocaleString()}</td><td>Agent #${w.agent_id}</td><td>${w.minutes_spent}</td><td>${w.note || "-"}</td></tr>
+    `).join("") || `<tr><td colspan="4" class="empty-row">No log entries.</td></tr>`;
+
+    document.getElementById("commentsList").innerHTML = (ticket.comments || []).map((c) => `
+      <div class="comment"><div>${c.comment}</div><div class="meta">User #${c.user_id} — ${new Date(c.created_at).toLocaleString()}</div></div>
+    `).join("") || `<div class="empty-row">No comments yet.</div>`;
+  }
+
+  async function changeStatus(status) {
+    await Api.patch(`/api/tickets/${id}`, { status });
+    load();
+  }
+
+  async function saveAssign() {
+    const val = document.getElementById("assignSelect").value;
+    await Api.patch(`/api/tickets/${id}`, { assigned_to: val ? Number(val) : null });
+    load();
+  }
+
+  async function saveRemote() {
+    await Api.patch(`/api/tickets/${id}`, {
+      remote_tool: document.getElementById("remoteTool").value || null,
+      remote_session_link: document.getElementById("remoteLink").value || null
+    });
+    load();
+  }
+
+  async function addWorkLog() {
+    const minutes_spent = Number(document.getElementById("wlMinutes").value);
+    const note = document.getElementById("wlNote").value;
+    if (!minutes_spent) return;
+    await Api.post(`/api/tickets/${id}/worklog`, { minutes_spent, note });
+    document.getElementById("wlMinutes").value = "";
+    document.getElementById("wlNote").value = "";
+    load();
+  }
+
+  async function addComment() {
+    const comment = document.getElementById("newComment").value;
+    if (!comment) return;
+    await Api.post(`/api/tickets/${id}/comments`, { comment });
+    document.getElementById("newComment").value = "";
+    load();
+  }
+
+  load();
+</script>
+</body>
+</html>

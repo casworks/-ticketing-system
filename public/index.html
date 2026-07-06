@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Fresh Ticketing System — Login</title>
+<link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+<div class="login-wrap">
+  <div class="card login-card">
+    <div class="brand-row" id="brandRow"></div>
+    <p>Sign in to continue</p>
+    <label>Email</label>
+    <input id="email" type="email" value="admin@demo.com" />
+    <label>Password</label>
+    <input id="password" type="password" value="admin123" />
+    <button class="btn" style="margin-top:16px;width:100%;justify-content:center" onclick="login()">Sign In</button>
+    <div class="error-msg" id="errorMsg"></div>
+    <div class="hint">
+      admin@demo.com / admin123 (Admin)<br />
+      agent@demo.com / agent123 (Agent)<br />
+      customer@demo.com / customer123 (Customer)
+    </div>
+  </div>
+</div>
+<script src="/js/icons.js"></script>
+<script src="/js/api.js"></script>
+<script>
+  document.getElementById("brandRow").innerHTML = `${Icons.logo}<h1>Fresh Ticketing</h1>`;
+  if (Api.token()) window.location.href = "/dashboard.html";
+
+  async function login() {
+    const email = document.getElementById("email").value;
+    const password = document.getElementById("password").value;
+    const errorMsg = document.getElementById("errorMsg");
+    errorMsg.textContent = "";
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Login failed");
+      localStorage.setItem("token", data.token);
+      localStorage.setItem("user", JSON.stringify(data.user));
+      window.location.href = "/dashboard.html";
+    } catch (e) {
+      errorMsg.textContent = e.message;
+    }
+  }
+</script>
+</body>
+</html>

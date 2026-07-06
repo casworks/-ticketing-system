@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Payroll — Fresh Ticketing System</title>
+<link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+<div class="sidebar" id="sidebar"></div>
+<div class="layout">
+  <div class="page-header"><h1>Payroll</h1></div>
+  <div class="card">
+    <div class="filters">
+      <select id="fAgent"><option value="">All Agents</option></select>
+      <input id="fFrom" type="date" />
+      <input id="fTo" type="date" />
+      <button class="btn small" onclick="load()">Filter</button>
+    </div>
+    <table>
+      <thead><tr><th>Agent</th><th>Hours</th><th>Rate/Hour</th><th>Entries</th><th>Payable</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div style="text-align:right;margin-top:12px;font-weight:700" id="total"></div>
+  </div>
+</div>
+<script src="/js/icons.js"></script>
+<script src="/js/api.js"></script>
+<script src="/js/nav.js"></script>
+<script>
+  Api.requireLogin();
+  renderSidebar("/payroll.html");
+
+  function fmt(n) {
+    return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
+  }
+
+  async function init() {
+    const agents = await Api.get("/api/payroll/agents");
+    document.getElementById("fAgent").innerHTML += agents.map((a) => `<option value="${a.id}">${a.name}</option>`).join("");
+    load();
+  }
+
+  async function load() {
+    const params = new URLSearchParams();
+    const agent = document.getElementById("fAgent").value;
+    const from = document.getElementById("fFrom").value;
+    const to = document.getElementById("fTo").value;
+    if (agent) params.set("agent_id", agent);
+    if (from) params.set("from", from);
+    if (to) params.set("to", to);
+
+    const summary = await Api.get(`/api/payroll/summary?${params.toString()}`);
+    document.getElementById("rows").innerHTML = summary.map((s) => `
+      <tr>
+        <td>${s.agent_name}</td>
+        <td>${s.total_hours}</td>
+        <td>${fmt(s.hourly_rate)}</td>
+        <td>${s.entries}</td>
+        <td>${fmt(s.payable_amount)}</td>
+      </tr>
+    `).join("") || `<tr><td colspan="5" class="empty-row">No payroll data yet.</td></tr>`;
+
+    const total = summary.reduce((sum, s) => sum + s.payable_amount, 0);
+    document.getElementById("total").textContent = `Total: ${fmt(total)}`;
+  }
+
+  init();
+</script>
+</body>
+</html>

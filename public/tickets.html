@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Tickets — Fresh Ticketing System</title>
+<link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+<div class="sidebar" id="sidebar"></div>
+<div class="layout">
+  <div class="page-header">
+    <h1>Tickets</h1>
+    <button class="btn" id="newTicketBtn" onclick="openCreate()">New Ticket</button>
+  </div>
+
+  <div class="filters">
+    <select id="fStatus" onchange="load()">
+      <option value="">All Status</option>
+      <option value="new">New</option>
+      <option value="assigned">Assigned</option>
+      <option value="in_progress">In Progress</option>
+      <option value="resolved">Resolved</option>
+      <option value="closed">Closed</option>
+      <option value="reopened">Reopened</option>
+    </select>
+    <select id="fCategory" onchange="load()">
+      <option value="">All Categories</option>
+      <option value="software">Software</option>
+      <option value="hardware">Hardware</option>
+      <option value="virus">Virus</option>
+      <option value="network">Network</option>
+      <option value="other">Other</option>
+    </select>
+    <select id="fPriority" onchange="load()">
+      <option value="">All Priorities</option>
+      <option value="low">Low</option>
+      <option value="medium">Medium</option>
+      <option value="high">High</option>
+      <option value="critical">Critical</option>
+    </select>
+  </div>
+
+  <div class="card">
+    <table>
+      <thead><tr><th>ID</th><th>Title</th><th>Category</th><th>Priority</th><th>Status</th><th>Remote Tool</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="createModal">
+  <div class="modal">
+    <h2>New Ticket</h2>
+    <label>Title</label>
+    <input id="cTitle" />
+    <label>Description</label>
+    <textarea id="cDesc" rows="3"></textarea>
+    <label>Category</label>
+    <select id="cCategory" onchange="loadCustomFields()">
+      <option value="software">Software</option>
+      <option value="hardware">Hardware</option>
+      <option value="virus">Virus</option>
+      <option value="network">Network</option>
+      <option value="other">Other</option>
+    </select>
+    <label>Priority</label>
+    <select id="cPriority">
+      <option value="low">Low</option>
+      <option value="medium" selected>Medium</option>
+      <option value="high">High</option>
+      <option value="critical">Critical</option>
+    </select>
+    <div id="customFieldsArea"></div>
+    <div class="error-msg" id="cError"></div>
+    <div class="modal-actions">
+      <button class="btn secondary" onclick="closeCreate()">Cancel</button>
+      <button class="btn" onclick="submitCreate()">Save</button>
+    </div>
+  </div>
+</div>
+
+<script src="/js/icons.js"></script>
+<script src="/js/api.js"></script>
+<script src="/js/nav.js"></script>
+<script>
+  Api.requireLogin();
+  renderSidebar("/tickets.html");
+  document.getElementById("newTicketBtn").innerHTML = `${Icons.plus} New Ticket`;
+
+  async function load() {
+    const params = new URLSearchParams();
+    ["fStatus", "fCategory", "fPriority"].forEach((id) => {
+      const key = id.replace("f", "").toLowerCase();
+      const val = document.getElementById(id).value;
+      if (val) params.set(key, val);
+    });
+    const tickets = await Api.get(`/api/tickets?${params.toString()}`);
+    document.getElementById("rows").innerHTML = tickets.map((t) => `
+      <tr onclick="window.location.href='/ticket-detail.html?id=${t.id}'" style="cursor:pointer">
+        <td>#${t.id}</td>
+        <td>${t.title}</td>
+        <td>${t.category}</td>
+        <td><span class="badge ${t.priority}">${t.priority}</span></td>
+        <td><span class="badge ${t.status}">${t.status.replace("_", " ")}</span></td>
+        <td>${t.remote_tool || "-"}</td>
+      </tr>
+    `).join("") || `<tr><td colspan="6" class="empty-row">No tickets found.</td></tr>`;
+  }
+
+  function openCreate() {
+    document.getElementById("createModal").classList.add("open");
+    loadCustomFields();
+  }
+  function closeCreate() {
+    document.getElementById("createModal").classList.remove("open");
+    document.getElementById("cError").textContent = "";
+  }
+
+  async function loadCustomFields() {
+    const category = document.getElementById("cCategory").value;
+    const fields = await Api.get(`/api/custom-fields?category=${category}`);
+    document.getElementById("customFieldsArea").innerHTML = fields.map((f) => `
+      <label>${f.label}${f.required ? " *" : ""}</label>
+      ${f.field_type === "dropdown"
+        ? `<select data-field="${f.name}">${f.options.map((o) => `<option value="${o}">${o}</option>`).join("")}</select>`
+        : f.field_type === "checkbox"
+        ? `<input type="checkbox" data-field="${f.name}" style="width:auto" />`
+        : `<input type="${f.field_type === "number" ? "number" : f.field_type === "date" ? "date" : "text"}" data-field="${f.name}" />`
+      }
+    `).join("");
+  }
+
+  async function submitCreate() {
+    const cError = document.getElementById("cError");
+    cError.textContent = "";
+    const custom_values = {};
+    document.querySelectorAll("#customFieldsArea [data-field]").forEach((el) => {
+      custom_values[el.dataset.field] = el.type === "checkbox" ? el.checked : el.value;
+    });
+    try {
+      await Api.post("/api/tickets", {
+        title: document.getElementById("cTitle").value,
+        description: document.getElementById("cDesc").value,
+        category: document.getElementById("cCategory").value,
+        priority: document.getElementById("cPriority").value,
+        custom_values
+      });
+      closeCreate();
+      document.getElementById("cTitle").value = "";
+      document.getElementById("cDesc").value = "";
+      load();
+    } catch (e) {
+      cError.textContent = e.message;
+    }
+  }
+
+  load();
+</script>
+</body>
+</html>

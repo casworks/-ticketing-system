@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Dashboard — Fresh Ticketing System</title>
+<link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+<div class="sidebar" id="sidebar"></div>
+<div class="layout">
+  <div class="page-header"><h1>Dashboard</h1></div>
+  <div class="stat-grid" id="statGrid"></div>
+
+  <div class="card">
+    <h3>Recent Tickets</h3>
+    <table>
+      <thead><tr><th>ID</th><th>Title</th><th>Category</th><th>Priority</th><th>Status</th></tr></thead>
+      <tbody id="recentTickets"></tbody>
+    </table>
+  </div>
+</div>
+<script src="/js/icons.js"></script>
+<script src="/js/api.js"></script>
+<script src="/js/nav.js"></script>
+<script>
+  Api.requireLogin();
+  renderSidebar("/dashboard.html");
+
+  async function load() {
+    const tickets = await Api.get("/api/tickets");
+    const counts = { new: 0, assigned: 0, in_progress: 0, resolved: 0, closed: 0, reopened: 0 };
+    tickets.forEach((t) => counts[t.status] = (counts[t.status] || 0) + 1);
+
+    document.getElementById("statGrid").innerHTML = Object.entries(counts).map(([status, n]) => `
+      <div class="stat-card">
+        <div class="label">${status.replace("_", " ")}</div>
+        <div class="value">${n}</div>
+      </div>
+    `).join("");
+
+    document.getElementById("recentTickets").innerHTML = tickets
+      .slice()
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+      .slice(0, 8)
+      .map((t) => `
+        <tr onclick="window.location.href='/ticket-detail.html?id=${t.id}'" style="cursor:pointer">
+          <td>#${t.id}</td>
+          <td>${t.title}</td>
+          <td>${t.category}</td>
+          <td><span class="badge ${t.priority}">${t.priority}</span></td>
+          <td><span class="badge ${t.status}">${t.status.replace("_", " ")}</span></td>
+        </tr>
+      `).join("") || `<tr><td colspan="5" class="empty-row">No tickets yet.</td></tr>`;
+  }
+  load();
+</script>
+</body>
+</html>

@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Custom Fields — Fresh Ticketing System</title>
+<link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+<div class="sidebar" id="sidebar"></div>
+<div class="layout">
+  <div class="page-header"><h1>Custom Fields</h1></div>
+  <div class="card">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px">
+      <div><label>Field Name</label><input id="fName" placeholder="os_version" /></div>
+      <div><label>Label</label><input id="fLabel" placeholder="OS Version" /></div>
+      <div><label>Type</label>
+        <select id="fType">
+          <option value="text">Text</option>
+          <option value="number">Number</option>
+          <option value="dropdown">Dropdown</option>
+          <option value="checkbox">Checkbox</option>
+          <option value="date">Date</option>
+        </select>
+      </div>
+      <div><label>Category</label>
+        <select id="fCategory">
+          <option value="all">All</option>
+          <option value="software">Software</option>
+          <option value="hardware">Hardware</option>
+          <option value="virus">Virus</option>
+          <option value="network">Network</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+    </div>
+    <label>Dropdown Options (comma-separated)</label>
+    <input id="fOptions" placeholder="Option A, Option B, Option C" />
+    <label style="display:flex;align-items:center;gap:8px;margin-top:12px">
+      <input type="checkbox" id="fRequired" style="width:auto" /> Required
+    </label>
+    <button class="btn" id="addFieldBtn" style="margin-top:14px" onclick="createField()">Add Field</button>
+    <div class="error-msg" id="fError"></div>
+  </div>
+
+  <div class="card">
+    <h3>Existing Fields</h3>
+    <table>
+      <thead><tr><th>Name</th><th>Label</th><th>Type</th><th>Category</th><th>Required</th><th></th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+</div>
+<script src="/js/icons.js"></script>
+<script src="/js/api.js"></script>
+<script src="/js/nav.js"></script>
+<script>
+  Api.requireLogin();
+  renderSidebar("/custom-fields.html");
+  document.getElementById("addFieldBtn").innerHTML = `${Icons.plus} Add Field`;
+
+  async function load() {
+    const fields = await Api.get("/api/custom-fields");
+    document.getElementById("rows").innerHTML = fields.map((f) => `
+      <tr>
+        <td>${f.name}</td><td>${f.label}</td><td>${f.field_type}</td><td>${f.applies_to_category}</td>
+        <td>${f.required ? "Yes" : "No"}</td>
+        <td><button class="btn small secondary" onclick="removeField(${f.id})">Delete</button></td>
+      </tr>
+    `).join("") || `<tr><td colspan="6" class="empty-row">No custom fields yet.</td></tr>`;
+  }
+
+  async function createField() {
+    const fError = document.getElementById("fError");
+    fError.textContent = "";
+    try {
+      await Api.post("/api/custom-fields", {
+        name: document.getElementById("fName").value,
+        label: document.getElementById("fLabel").value,
+        field_type: document.getElementById("fType").value,
+        applies_to_category: document.getElementById("fCategory").value,
+        required: document.getElementById("fRequired").checked,
+        options: document.getElementById("fOptions").value
+          ? document.getElementById("fOptions").value.split(",").map((s) => s.trim())
+          : []
+      });
+      document.getElementById("fName").value = "";
+      document.getElementById("fLabel").value = "";
+      document.getElementById("fOptions").value = "";
+      load();
+    } catch (e) {
+      fError.textContent = e.message;
+    }
+  }
+
+  async function removeField(id) {
+    await Api.del(`/api/custom-fields/${id}`);
+    load();
+  }
+
+  load();
+</script>
+</body>
+</html>
