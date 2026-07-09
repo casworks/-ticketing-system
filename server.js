@@ -22,6 +22,13 @@ app.use("/api/users", userRoutes);
 
 app.use(express.static(path.join(__dirname, "public")));
 
-app.listen(PORT, () => {
-  console.log(`Fresh Ticketing System running at http://localhost:${PORT}`);
-});
+// Vercel imports this file as a serverless function and calls the exported
+// app directly — it must not also bind a port. Only listen when run
+// directly (local dev, Render, or any plain Node host).
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`Fresh Ticketing System running at http://localhost:${PORT}`);
+  });
+}
+
+module.exports = app;

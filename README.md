@@ -120,6 +120,19 @@ Postgres-backed implementation (e.g. Render's free Postgres add-on +
 `DATABASE_URL` env var) — the rest of the app (routes, workflow, frontend)
 doesn't need to change.
 
+## Deploying to Vercel (free tier, no card required)
+
+`vercel.json` routes every request to `server.js`, which is exported as the
+serverless function entrypoint (it only calls `app.listen()` when run
+directly, e.g. `node server.js` locally). No build step or environment
+variables are needed — just import the GitHub repo on vercel.com and deploy.
+
+**Storage caveat:** on Vercel the filesystem is read-only except `/tmp`, so
+`src/db.js` writes to `/tmp/db.json` when `process.env.VERCEL` is set. `/tmp`
+is wiped even more aggressively than Render's disk — expect data to reset on
+most cold starts. Same tradeoff as Render: fine for demoing, not for
+retaining real ticket data (see the Postgres note above).
+
 ## Project structure
 
 ```

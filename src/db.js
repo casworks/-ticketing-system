@@ -1,7 +1,10 @@
 const fs = require("fs");
 const path = require("path");
 
-const DB_FILE = path.join(__dirname, "data", "db.json");
+// Serverless hosts (Vercel) ship a read-only filesystem except /tmp.
+const DB_FILE = process.env.VERCEL
+  ? path.join("/tmp", "db.json")
+  : path.join(__dirname, "data", "db.json");
 
 function defaultData() {
   return {
