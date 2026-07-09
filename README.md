@@ -38,6 +38,88 @@ Demo accounts (seeded automatically on first run):
 7. **Payroll** — agents log time spent per ticket (work log); `payroll.html` computes payable amount = hours x hourly rate, filterable by agent/date.
 8. **UI panel** — dashboard with stat cards, ticket list with filters, ticket detail, custom field builder, payroll report — dark professional theme.
 
+## Ticketing documentation
+
+### Roles
+
+| Role | Can do |
+|---|---|
+| Admin | everything: manage tickets, assign agents, build custom fields, view payroll |
+| Agent | view tickets assigned to them or unassigned, work tickets, log time, use remote tools |
+| Customer | create tickets, view/comment on their own tickets |
+
+### Ticket categories
+
+`software`, `hardware`, `virus`, `network`, `other` — set per ticket, used to scope which custom fields apply.
+
+### Priority levels
+
+`low`, `medium`, `high`, `critical`.
+
+### Workflow (status state machine)
+
+```
+new ──────► assigned ──────► in_progress ──────► resolved ──► closed
+ │              │                  │                 │           │
+ └──► closed    ├──► closed        └──► assigned      └──► reopened ──► closed
+                └──► new                                          │
+                                                                    └──► assigned / in_progress
+```
+
+Transitions are enforced server-side in [src/workflow.js](src/workflow.js) — the API
+rejects any status change that isn't in the allowed-next list for the ticket's
+current status.
+
+### Remote support tooling
+
+Every ticket has a Remote Session panel to record which tool was used to work
+the issue (AnyDesk, TeamViewer, Chrome Remote Desktop) and the session ID or
+connection link, so there's an audit trail of remote access per ticket.
+
+### Custom fields
+
+Admins can add ticket attributes without touching code, from **Custom Fields**
+in the sidebar: field name/key, display label, type (text, number, dropdown,
+checkbox, date), which category it applies to (or "all"), and whether it's
+required. Required fields are validated when a ticket is created for a
+matching category.
+
+### Payroll
+
+Agents log time spent per ticket (minutes + optional note) from the ticket
+detail page. The **Payroll** page (admin-only) aggregates logged minutes per
+agent into hours, multiplies by each agent's hourly rate, and reports a
+payable amount — filterable by agent and date range.
+
+### API testing
+
+Import `postman/Fresh-Ticketing-System.postman_collection.json` into Postman.
+Run **Auth → Login (admin)** first, copy the returned `token` into the
+collection's `token` variable, then the rest of the requests (Tickets, Custom
+Fields, Payroll) will authenticate automatically via the `Authorization:
+Bearer {{token}}` header.
+
+## Deploying to Render (free tier)
+
+This app needs **no `.env` file and no database service** to run — it only
+reads the `PORT` environment variable, which Render sets automatically.
+
+1. Push this repo to GitHub (already done).
+2. On Render: **New → Web Service** → connect this repo.
+3. Build command: `npm install`
+4. Start command: `npm start`
+5. No environment variables required.
+
+**Storage caveat:** data is stored in a local JSON file
+(`src/data/db.json`), not a database. On Render's free tier the disk is
+ephemeral — every redeploy, and every time the free instance spins down after
+~15 minutes of inactivity and wakes back up, ticket data resets to the seed
+data. This is fine for demoing the UI/API/workflow, but not for retaining
+real ticket data. If persistence is needed later, swap `src/db.js` for a
+Postgres-backed implementation (e.g. Render's free Postgres add-on +
+`DATABASE_URL` env var) — the rest of the app (routes, workflow, frontend)
+doesn't need to change.
+
 ## Project structure
 
 ```
